@@ -1,10 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-require-imports */
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import { supabase } from '../../../lib/supabase';
-import { ConversionRequest, ConversionResponse } from '../../../types';
+import { createClient } from '@supabase/supabase-js';
 
 export const config = {
   api: {
@@ -14,19 +10,24 @@ export const config = {
   },
 };
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<ConversionResponse>
-) {
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!, 
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+export async function POST(req: NextRequest) {
   if (req.method !== 'POST') {
-    return res.status(405).json({
-      message: 'Method not allowed',
-      error: 'Only POST requests are supported',
-    });
+    return NextResponse.json(
+      {
+        message: 'Method not allowed',
+        error: 'Only POST requests are supported',
+      },
+      { status: 405 }
+    );
   }
 
   try {
-    const { file, targetFormat }: ConversionRequest = req.body;
+    const { file, targetFormat } = await req.json();
 
     // Step 1: Start conversion job
     const startConversionResponse = await axios.post(
@@ -38,7 +39,6 @@ export default async function handler(
         outputformat: targetFormat
       }
     );
-
     const { id } = startConversionResponse.data;
 
     // Step 2: Check conversion status
@@ -79,16 +79,18 @@ export default async function handler(
       .getPublicUrl(fileName);
 
     // Step 7: Respond with converted file URL
-    res.status(200).json({
+    return NextResponse.json({
       message: 'Conversion successful',
       fileUrl: publicUrl,
     });
   } catch (error: any) {
     console.error('Error during file conversion:', error.message);
-
-    res.status(500).json({
-      message: 'Conversion failed',
-      error: error.message,
-    });
+    return NextResponse.json(
+      {
+        message: 'Conversion failed',
+        error: error.message,
+      },
+      { status: 500 }
+    );
   }
 }
